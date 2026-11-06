@@ -322,6 +322,57 @@ def parse_figures_for_jats(content: str) -> str:
     return content
 
 
+def ensure_figure_and_table_ids(content: str) -> str:
+    """Give every figure, table wrapper, and table a document-unique ID.
+
+    Keep existing IDs when they are unique. Reserve IDs on other elements too,
+    so generated IDs cannot collide with them.
+    """
+    tag_pattern = re.compile(r'<([A-Za-z][\w:.-]*)\b(?:[^>"\']|"[^"]*"|\'[^\']*\')*>')
+    id_pattern = re.compile(r'(?<![\w:.-])id\s*=\s*(["\'])(.*?)\1', re.DOTALL)
+    target_names = {'fig', 'table-wrap', 'table'}
+    tags = list(tag_pattern.finditer(content))
+
+    # IDs on other elements take priority if the input already contains a collision.
+    reserved = set()
+    for tag in tags:
+        if tag.group(1) not in target_names:
+            existing = id_pattern.search(tag.group(0))
+            if existing:
+                reserved.add(existing.group(2))
+
+    def add_id(tag):
+        name = tag.group(1)
+        opening_tag = tag.group(0)
+        if name not in target_names:
+            return opening_tag
+
+        existing = id_pattern.search(opening_tag)
+        if existing and existing.group(2) and existing.group(2) not in reserved:
+            reserved.add(existing.group(2))
+            return opening_tag
+
+        prefix = 'fig' if name == 'fig' else 'table-wrap' if name == 'table-wrap' else 'table'
+        new_id = f'{prefix}-{uuid.uuid4().hex}'
+        while new_id in reserved:
+            new_id = f'{prefix}-{uuid.uuid4().hex}'
+        reserved.add(new_id)
+
+        if existing:
+            return opening_tag[:existing.start(2)] + new_id + opening_tag[existing.end(2):]
+        return opening_tag.replace(f'<{name}', f'<{name} id="{new_id}"', 1)
+
+    # Rebuild from the original spans so existing formatting and the DOCTYPE survive.
+    parts = []
+    cursor = 0
+    for tag in tags:
+        parts.append(content[cursor:tag.start()])
+        parts.append(add_id(tag))
+        cursor = tag.end()
+    parts.append(content[cursor:])
+    return ''.join(parts)
+
+
 def flatten_table_blockquotes(content: str) -> str:
     """
     Flatten complex table cell structures to simple, OJS-compatible format.
@@ -621,6 +672,9 @@ def convert_markdown_to_xml(input_file: str, output_file: str) -> bool:
 
             # Wrap body content in sections
             content = wrap_body_content_in_sections(content)
+
+            # Include Pandoc's figures and both levels of each JATS table.
+            content = ensure_figure_and_table_ids(content)
 
             # Write the processed content back
             with open(output_file, 'w', encoding='utf-8') as f:

@@ -19,6 +19,7 @@ import sys
 import subprocess
 import re
 import uuid
+from xml.parsers import expat
 from pathlib import Path
 from typing import Optional
 
@@ -525,7 +526,60 @@ def wrap_body_content_in_sections(content: str) -> str:
     # Apply the section wrapping
     content = re.sub(body_pattern, wrap_body_content, content, flags=re.MULTILINE | re.DOTALL)
     
-    return content
+    return ensure_section_titles(content)
+
+
+def ensure_section_titles(content: str) -> str:
+    """Insert an empty title into each section without a direct title child.
+
+    Expat locates insertion points without rewriting the JATS declaration,
+    namespaces, or formatting. A title follows sec-meta and label when present.
+    """
+    xml_bytes = content.encode('utf-8')
+    parser = expat.ParserCreate()
+    stack = []
+    edits = []
+
+    def tag_end(start):
+        quote = None
+        for index in range(start, len(xml_bytes)):
+            char = xml_bytes[index]
+            if quote is not None:
+                if char == quote:
+                    quote = None
+            elif char in (ord('"'), ord("'")):
+                quote = char
+            elif char == ord('>'):
+                return index + 1
+        raise ValueError('Unclosed XML tag')
+
+    def start_element(name, _attributes):
+        parent = stack[-1] if stack else None
+        if parent and parent['name'] == 'sec' and name == 'title':
+            parent['has_title'] = True
+        position = tag_end(parser.CurrentByteIndex) if name == 'sec' else None
+        stack.append({'name': name, 'position': position, 'has_title': False,
+                      'self_closing': position is not None and xml_bytes[position - 2:position] == b'/>'})
+
+    def end_element(name):
+        element = stack.pop()
+        position = parser.CurrentByteIndex
+        end = tag_end(position) if xml_bytes[position:position + 2] == b'</' else position
+        if name == 'sec' and not element['has_title']:
+            if element['self_closing']:
+                edits.append((element['position'] - 2, element['position'], b'><title/></sec>'))
+            else:
+                edits.append((element['position'], element['position'], b'\n    <title/>'))
+        if stack and stack[-1]['name'] == 'sec' and name in ('sec-meta', 'label'):
+            stack[-1]['position'] = end
+
+    parser.StartElementHandler = start_element
+    parser.EndElementHandler = end_element
+    parser.Parse(xml_bytes, True)
+
+    for start, end, replacement in sorted(edits, reverse=True):
+        xml_bytes = xml_bytes[:start] + replacement + xml_bytes[end:]
+    return xml_bytes.decode('utf-8')
 
 
 

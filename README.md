@@ -132,7 +132,7 @@ The script generates Markdown files with:
 The script generates JATS XML files with:
 - **JATS compliance**: Valid JATS archiving format
 - **Figure and table elements**: Unique IDs on `<fig>`, `<table-wrap>`, and `<table>`
-- **Section structure**: All content wrapped in `<sec>` tags with unique IDs
+- **Section structure**: All content wrapped in `<sec>` tags with unique IDs and a `<title>` child (empty when no heading exists)
 - **Academic metadata**: Proper front matter and back matter
 - **Cross-references**: Maintained footnote and figure references
 
@@ -150,6 +150,7 @@ The script generates JATS XML files with:
   </front>
   <body>
     <sec id="heading-5f290d998d3a167395eeea11b3fbc3ff">
+      <title/>
       <p>Content here...</p>
       <fig id="fig-3560fbc17fd54362bc31c72c">
         <object-id id="object-id-c1d33202293748a493463ddb">fig-3560fbc17fd54362bc31c72c</object-id>
@@ -181,7 +182,7 @@ The script generates JATS XML files with:
 ### Markdown to JATS XML Processing
 1. **Pandoc conversion** - Converts Markdown to JATS archiving XML
 2. **Figure parsing** - Converts figure patterns to proper JATS XML elements
-3. **Section wrapping** - Ensures all body content is wrapped in `<sec>` tags
+3. **Section wrapping** - Ensures all body content is wrapped in `<sec>` tags and each section has a `<title>` child
 4. **ID generation** - Adds unique IDs to sections, figures, table wrappers, and tables; preserves existing unique IDs
 
 ## Troubleshooting

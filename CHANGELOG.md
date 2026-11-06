@@ -8,6 +8,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 ## Unreleased
 
 ### Fixed
+- Add an empty `<title/>` to generated or existing `<sec>` elements without a direct title child, while preserving authored section titles.
 - Add document-unique IDs to JATS `<fig>`, `<table-wrap>`, and `<table>` elements produced by Markdown conversion.
 - Preserve existing unique IDs and replace missing or colliding IDs on those elements.
 
